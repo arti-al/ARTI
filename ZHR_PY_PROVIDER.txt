@@ -1,0 +1,97 @@
+*&---------------------------------------------------------------------*
+*& Report  ZHR_PY_PROVIDER
+*&
+*&---------------------------------------------------------------------*
+*& Data for External Payroll Providers
+*&
+*&---------------------------------------------------------------------*
+REPORT zhr_py_provider.
+
+NODES pernr.
+INFOTYPES: 0001,
+           0002,
+           0007,
+           0008,
+           0032,
+           0130,
+           2006.
+
+CONSTANTS:
+  BEGIN OF c,
+    BEGIN OF wage_type,
+      overtime_number TYPE lgart VALUE '2000',
+      overtime_pay    TYPE lgart VALUE '1600',
+      hours_reset     TYPE lgart VALUE '2020',
+      salary          TYPE lgart VALUE '1400',
+    END OF wage_type,
+
+    BEGIN OF absence_quota,
+      paid_holidays TYPE p2006-ktart VALUE '11',
+    END OF absence_quota,
+  END OF c.
+
+DATA periods_reader TYPE REF TO zcl_hr_py_periods_reader.
+DATA app            TYPE REF TO zcl_py_provider_app.
+DATA py_periods     TYPE zcl_hr_py_periods_reader=>tt_periods.
+DATA cx_salv        TYPE REF TO cx_salv_error.
+DATA processed      TYPE i.
+
+" Selection-Screen
+INCLUDE zhr_py_provider_sel.
+
+INITIALIZATION.
+  pnptimed = 'D'.
+
+  " Only active employees
+  rp-sel-ein-aus-init.
+
+  p_ovrtwt = c-wage_type-overtime_number.
+  p_ovrpwt = c-wage_type-overtime_pay.
+  p_hrrwt  = c-wage_type-hours_reset.
+  p_salwt  = c-wage_type-salary.
+  p_quota  = c-absence_quota-paid_holidays.
+
+  app = zcl_py_provider_app=>create( ).
+
+START-OF-SELECTION.
+  app->set_params( begda                     = pn-begda
+                   endda                     = pn-endda
+                   payroll_begda             = COND #( WHEN s_pyper-low  IS NOT INITIAL THEN s_pyper-low )
+                   payroll_endda             = COND #( WHEN s_pyper-high IS NOT INITIAL THEN s_pyper-high )
+                   overtime_number_wage_type = p_ovrtwt
+                   overtime_pay_wage_type    = p_ovrpwt
+                   hours_reset_wage_type     = p_hrrwt
+                   salary_wage_type          = p_salwt
+                   quota_type                = p_quota
+                   vacation_for_leavers      = p_vacl
+                   data_for_end_of_period    = p_endp
+                   layout                    = p_layout ).
+
+  app->init_dynamic_data( ).
+
+GET pernr.
+  processed = processed + 1.
+
+  app->progress( text      = |Processing { pernr-pernr }...|
+                 processed = processed ).
+
+  rp_provide_from_last p0002 space   pn-begda pn-endda.
+  rp_provide_from_last p0032 space   pn-begda pn-endda.
+  rp_provide_from_last p2006 p_quota pn-begda pn-endda.
+
+  app->add_employee_data( pernr  = pernr-pernr
+                          p0001s = CONV #( p0001[] )
+                          p0002  = p0002
+                          p0007s = p0007[]
+                          p0008s = p0008[]
+                          p0032  = p0032
+                          p0130s = CONV #( p0130[] )
+                          p2006  = p2006 ).
+
+END-OF-SELECTION.
+  TRY.
+      app->output( report     = sy-repid
+                   gui_status = 'SALV_TABLE_STANDARD' ).
+    CATCH cx_salv_error INTO cx_salv.
+      MESSAGE cx_salv->get_text( ) TYPE 'E'.
+  ENDTRY.
