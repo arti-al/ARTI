@@ -1,6 +1,6 @@
 *&---------------------------------------------------------------------*
 *& Report  ZHR_PY_PROVIDER
-*&
+*& Extracts employee payroll data for external payroll providers
 *&---------------------------------------------------------------------*
 *& Data for External Payroll Providers
 *&
