@@ -1,6 +1,6 @@
 *&---------------------------------------------------------------------*
 *& Report  ZHR_PY_PROVIDER
-*& Extracts employee payroll data for external payroll providers
+*&
 *&---------------------------------------------------------------------*
 *& Data for External Payroll Providers
 *&
@@ -12,6 +12,7 @@ INFOTYPES: 0001,
            0002,
            0007,
            0008,
+           0015,
            0032,
            0130,
            2006.
@@ -23,7 +24,7 @@ CONSTANTS:
       overtime_pay    TYPE lgart VALUE '1600',
       hours_reset     TYPE lgart VALUE '2020',
       salary          TYPE lgart VALUE '1400',
-      bonus_payout    TYPE lgart VALUE '9999',
+      bonus_payout    TYPE lgart VALUE '4100',
     END OF wage_type,
 
     BEGIN OF absence_quota,
@@ -46,12 +47,14 @@ INITIALIZATION.
   " Only active employees
   rp-sel-ein-aus-init.
 
-  p_ovrtwt  = c-wage_type-overtime_number.
-  p_ovrpwt  = c-wage_type-overtime_pay.
-  p_hrrwt   = c-wage_type-hours_reset.
-  p_salwt   = c-wage_type-salary.
-  p_bonuswt = c-wage_type-bonus_payout.
+  p_ovrtwt = c-wage_type-overtime_number.
+  p_ovrpwt = c-wage_type-overtime_pay.
+  p_hrrwt  = c-wage_type-hours_reset.
+  p_salwt  = c-wage_type-salary.
+  p_bonwt = c-wage_type-bonus_payout.
   p_quota  = c-absence_quota-paid_holidays.
+
+
 
   app = zcl_py_provider_app=>create( ).
 
@@ -64,7 +67,7 @@ START-OF-SELECTION.
                    overtime_pay_wage_type    = p_ovrpwt
                    hours_reset_wage_type     = p_hrrwt
                    salary_wage_type          = p_salwt
-                   bonus_payout_wage_type    = p_bonuswt
+                   bonus_payout_wage_type    = p_bonwt
                    quota_type                = p_quota
                    vacation_for_leavers      = p_vacl
                    data_for_end_of_period    = p_endp
@@ -87,6 +90,7 @@ GET pernr.
                           p0002  = p0002
                           p0007s = p0007[]
                           p0008s = p0008[]
+                          p0015s = CONV #( p0015[] )
                           p0032  = p0032
                           p0130s = CONV #( p0130[] )
                           p2006  = p2006 ).

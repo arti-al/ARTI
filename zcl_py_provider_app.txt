@@ -36,6 +36,9 @@ CLASS zcl_py_provider_app DEFINITION
       tt_p0130 TYPE STANDARD TABLE OF p0130 WITH DEFAULT KEY
                     WITH NON-UNIQUE SORTED KEY period COMPONENTS begda endda .
     TYPES:
+      tt_p0015 TYPE STANDARD TABLE OF p0015 WITH DEFAULT KEY .
+
+    TYPES:
       tt_pbwla TYPE STANDARD TABLE OF pbwla WITH DEFAULT KEY .
     TYPES:
       BEGIN OF ts_period,
@@ -68,6 +71,7 @@ CLASS zcl_py_provider_app DEFINITION
         !p0002  TYPE p0002
         !p0007s TYPE tt_p0007
         !p0008s TYPE tt_p0008
+        !p0015s TYPE tt_p0015
         !p0032  TYPE p0032
         !p0130s TYPE tt_p0130
         !p2006  TYPE p2006 .
@@ -273,6 +277,7 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
 * | [--->] P0002                          TYPE        P0002
 * | [--->] P0007S                         TYPE        TT_P0007
 * | [--->] P0008S                         TYPE        TT_P0008
+* | [--->] P0015S                         TYPE        TT_P0015
 * | [--->] P0032                          TYPE        P0032
 * | [--->] P0130S                         TYPE        TT_P0130
 * | [--->] P2006                          TYPE        P2006
@@ -433,15 +438,15 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
         <currency_salary> = p0008-waers.
       ENDIF.
 
+      DATA(bonus_p0015) = VALUE #( p0015s[ lgart = me->params-wage_type-bonus_payout ] OPTIONAL ).
       ASSIGN row->('BONUS_PAYOUT') TO FIELD-SYMBOL(<bonus_payout>).
       IF sy-subrc EQ 0.
-        DATA(bonus_wt) = VALUE #( evaluated_wage_types[ lgart = me->params-wage_type-bonus_payout ] OPTIONAL ).
-        <bonus_payout> = bonus_wt-betrg.
+        <bonus_payout> = bonus_p0015-betrg.
       ENDIF.
 
       ASSIGN row->('CURRENCY_BONUS') TO FIELD-SYMBOL(<currency_bonus>).
       IF sy-subrc EQ 0.
-        <currency_bonus> = p0008-waers.
+        <currency_bonus> = bonus_p0015-waers.
       ENDIF.
 
       ASSIGN row->('WEEKLY_HOURS') TO FIELD-SYMBOL(<weekly_hours>).
@@ -1338,6 +1343,7 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
 * | [--->] OVERTIME_PAY_WAGE_TYPE         TYPE        LGART
 * | [--->] HOURS_RESET_WAGE_TYPE          TYPE        LGART
 * | [--->] SALARY_WAGE_TYPE               TYPE        LGART
+* | [--->] BONUS_PAYOUT_WAGE_TYPE         TYPE        LGART
 * | [--->] QUOTA_TYPE                     TYPE        P2006-KTART
 * | [--->] VACATION_FOR_LEAVERS           TYPE        ABAP_BOOL
 * | [--->] DATA_FOR_END_OF_PERIOD         TYPE        ABAP_BOOL
