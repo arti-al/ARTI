@@ -474,7 +474,14 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
       ENDIF.
 
       IF me->params-time_transfer_subtype IS NOT INITIAL.
-        DATA(time_transfer_p2012) = VALUE #( p2012s[ subty = me->params-time_transfer_subtype ] OPTIONAL ).
+        DATA time_transfer_p2012 TYPE p2012.
+        CLEAR time_transfer_p2012.
+        LOOP AT p2012s INTO time_transfer_p2012
+          WHERE subty = me->params-time_transfer_subtype
+            AND begda <= period-endda
+            AND endda >= period-begda.
+          EXIT.
+        ENDLOOP.
         ASSIGN row->('TIME_TRANSFER') TO FIELD-SYMBOL(<time_transfer>).
         IF sy-subrc EQ 0.
           <time_transfer> = time_transfer_p2012-anzhl.
