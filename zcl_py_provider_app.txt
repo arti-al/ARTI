@@ -1,0 +1,1452 @@
+CLASS zcl_py_provider_app DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PRIVATE
+
+  GLOBAL FRIENDS zcl_py_provider_evt .
+
+  PUBLIC SECTION.
+
+    TYPES:
+      BEGIN OF ts_params,
+        begda                  TYPE begda,
+        endda                  TYPE endda,
+        payroll_begda          TYPE begda,
+        payroll_endda          TYPE endda,
+        quota_type             TYPE p2006-ktart,
+        vacation_for_leavers   TYPE abap_bool,
+        data_for_end_of_period TYPE abap_bool,
+        layout                 TYPE disvariant-variant,
+        BEGIN OF wage_type,
+          overtime_number TYPE lgart,
+          overtime_pay    TYPE lgart,
+          hours_reset     TYPE lgart,
+          salary          TYPE lgart,
+          bonus_payout    TYPE lgart,
+          empl_discount   TYPE lgart,
+        END OF wage_type,
+        time_transfer_subtype TYPE p2012-subty,
+      END OF ts_params .
+    TYPES:
+      tt_p0001 TYPE STANDARD TABLE OF p0001 WITH DEFAULT KEY
+                    WITH NON-UNIQUE SORTED KEY period COMPONENTS begda endda .
+    TYPES:
+      tt_p0007 TYPE STANDARD TABLE OF p0007 WITH DEFAULT KEY .
+    TYPES:
+      tt_p0008 TYPE STANDARD TABLE OF p0008 WITH DEFAULT KEY .
+    TYPES:
+      tt_p0130 TYPE STANDARD TABLE OF p0130 WITH DEFAULT KEY
+                    WITH NON-UNIQUE SORTED KEY period COMPONENTS begda endda .
+    TYPES:
+      tt_p0015 TYPE STANDARD TABLE OF p0015 WITH DEFAULT KEY .
+    TYPES:
+      tt_p2012 TYPE STANDARD TABLE OF p2012 WITH DEFAULT KEY .
+
+    TYPES:
+      tt_pbwla TYPE STANDARD TABLE OF pbwla WITH DEFAULT KEY .
+    TYPES:
+      BEGIN OF ts_period,
+        begda TYPE begda,
+        endda TYPE endda,
+        end   TYPE endda,
+      END OF ts_period .
+    TYPES:
+      tt_periods TYPE SORTED TABLE OF ts_period WITH UNIQUE KEY primary_key COMPONENTS end .
+
+    CONSTANTS:
+      BEGIN OF c ,
+        BEGIN OF command,
+          lock_it0130   TYPE sy-ucomm VALUE '&LOCK130',
+          unlock_it0130 TYPE sy-ucomm VALUE '&UNLOCK130',
+        END OF command,
+
+        BEGIN OF wage_type,
+          forced_payment TYPE lgart VALUE '9PAY',
+        END OF wage_type,
+      END OF c .
+
+    CLASS-METHODS create
+      RETURNING
+        VALUE(result) TYPE REF TO zcl_py_provider_app .
+    METHODS add_employee_data
+      IMPORTING
+        !pernr  TYPE pernr-pernr
+        !p0001s TYPE tt_p0001
+        !p0002  TYPE p0002
+        !p0007s TYPE tt_p0007
+        !p0008s TYPE tt_p0008
+        !p0015s TYPE tt_p0015
+        !p2012s TYPE tt_p2012
+        !p0032  TYPE p0032
+        !p0130s TYPE tt_p0130
+        !p2006  TYPE p2006 .
+    METHODS f4_layouts
+      IMPORTING
+        !restriction  TYPE salv_de_layout_restriction DEFAULT if_salv_c_layout=>restrict_none
+      RETURNING
+        VALUE(result) TYPE disvariant-variant .
+    METHODS get_default_layout
+      IMPORTING
+        !restriction  TYPE salv_de_layout_restriction DEFAULT if_salv_c_layout=>restrict_none
+      RETURNING
+        VALUE(result) TYPE disvariant-variant .
+    METHODS init_dynamic_data .
+    METHODS output
+      IMPORTING
+        !report     TYPE syrepid OPTIONAL
+        !gui_status TYPE sypfkey DEFAULT 'SALV_TABLE_STANDARD'
+      RAISING
+        cx_salv_error .
+    METHODS progress
+      IMPORTING
+        !immediate_output TYPE abap_bool DEFAULT abap_false
+        !total            TYPE i OPTIONAL
+        !processed        TYPE i OPTIONAL
+        !text             TYPE any .
+    METHODS set_params
+      IMPORTING
+        !begda                     TYPE begda
+        !endda                     TYPE endda
+        !payroll_begda             TYPE begda
+        !payroll_endda             TYPE endda
+        !overtime_number_wage_type TYPE lgart
+        !overtime_pay_wage_type    TYPE lgart
+        !hours_reset_wage_type     TYPE lgart
+        !salary_wage_type          TYPE lgart
+        !bonus_payout_wage_type    TYPE lgart
+        !empl_discount_wage_type   TYPE lgart
+        !time_transfer_subtype     TYPE p2012-subty
+        !quota_type                TYPE p2006-ktart
+        !vacation_for_leavers      TYPE abap_bool
+        !data_for_end_of_period    TYPE abap_bool
+        !layout                    TYPE disvariant-variant .
+  PROTECTED SECTION.
+private section.
+
+  class-data SELF type ref to ZCL_PY_PROVIDER_APP .
+  data ALV type ref to CL_SALV_TABLE .
+  data DATA type ref to DATA .
+  data EVENT_HANDLER type ref to ZCL_PY_PROVIDER_EVT .
+  data PARAMS type TS_PARAMS .
+
+  methods ADD_ROW
+    importing
+      !ROW type ref to DATA .
+  methods BUILD_DYNAMIC_TABLE
+    returning
+      value(RESULT) type ref to DATA .
+  methods BUILD_FIELD_CATALOG
+    returning
+      value(RESULT) type LVC_T_FCAT .
+  methods BUILD_PERIODS
+    importing
+      !B2_CLUSTER type HRF_TIM_B2
+    returning
+      value(RESULT) type TT_PERIODS .
+  methods CALCULATE_HOURS_COST
+    importing
+      !HOURS_RESET_NUMBER type PTR_F_ZL-ANZHL
+      !HOURLY_RATE type PBWLA-BETRG
+    returning
+      value(RESULT) type PBWLA-BETRG .
+  methods CALCULATE_OVERTIME_PAY
+    importing
+      !OVERTIME_NUMBER type PTR_F_ZL-ANZHL
+      !HOURLY_RATE type PBWLA-BETRG
+    returning
+      value(RESULT) type PBWLA-BETRG .
+  methods CALCULATE_VACATION_BALANCE
+    importing
+      !P2006 type P2006
+    returning
+      value(RESULT) type P2006-ANZHL .
+  methods CREATE_ROW
+    returning
+      value(ROW) type ref to DATA .
+  methods GET_B2_CLUSTER
+    importing
+      !PERNR type PERNR_D
+    returning
+      value(RESULT) type HRF_TIM_B2 .
+  methods GET_EVALUATED_WAGE_TYPES
+    importing
+      !PERNR type P0008-PERNR
+      !BEGDA type BEGDA
+      !ENDDA type ENDDA
+      !P0001S type TT_P0001
+      !P0007S type TT_P0007
+      !P0008S type TT_P0008
+    returning
+      value(RESULT) type TT_PBWLA .
+  methods GET_FORCED_PAYMENT_DATE
+    importing
+      !B2_CLUSTER type HRF_TIM_B2
+    returning
+      value(RESULT) type PTR_F_ZL-DATUM .
+  methods GET_HIRING_DATE
+    importing
+      !PERNR type P0001-PERNR
+      !MESSAGE_HANDLER type ref to IF_HRPA_MESSAGE_HANDLER
+    returning
+      value(RESULT) type BEGDA .
+  methods GET_HOURLY_RATE
+    importing
+      !EVALUATED_WAGE_TYPES type TT_PBWLA
+    returning
+      value(RESULT) type PBWLA-BETRG .
+  methods GET_HOURS_RESET_NUMBER
+    importing
+      !B2_CLUSTER type HRF_TIM_B2
+      !DATE type PTR_F_ZL-DATUM
+    returning
+      value(RESULT) type PTR_F_SALDO-ANZHL .
+  methods GET_LAST_P0001
+    importing
+      !P0001S type TT_P0001
+      !BEGDA type BEGDA
+      !ENDDA type ENDDA
+    returning
+      value(RESULT) type P0001 .
+  methods GET_LAST_P0130
+    importing
+      !P0130S type TT_P0130
+      !BEGDA type BEGDA
+      !ENDDA type ENDDA
+    returning
+      value(RESULT) type P0001 .
+  methods GET_LEAVING_DATE
+    importing
+      !PERNR type P0001-PERNR
+      !SELECTION_END_DATE type ENDDA
+      !MESSAGE_HANDLER type ref to IF_HRPA_MESSAGE_HANDLER
+    returning
+      value(RESULT) type ENDDA .
+  methods GET_MONTHLY_SALARY
+    importing
+      !EVALUATED_WAGE_TYPES type TT_PBWLA
+    returning
+      value(RESULT) type PBWLA-BETRG .
+  methods GET_OVERTIME_NUMBER
+    importing
+      !B2_CLUSTER type HRF_TIM_B2
+      !DATE type PTR_F_ZL-DATUM
+    returning
+      value(RESULT) type PTR_F_ZL-ANZHL .
+  methods GET_POSITION_TEXT
+    importing
+      !ID type P1000-OBJID
+      !BEGDA type P1000-BEGDA
+      !ENDDA type P1000-ENDDA
+    returning
+      value(RESULT) type P1000-STEXT .
+  methods GET_ZL_NUMBER
+    importing
+      !B2_CLUSTER type HRF_TIM_B2
+      !WAGE_TYPE type LGART
+      !DATE type PTR_F_ZL-DATUM
+    returning
+      value(RESULT) type PTR_F_ZL-ANZHL .
+  methods ICON
+    importing
+      !ICON type ICON-ID
+      !TEXT type STRING optional
+      !INFO type STRING optional
+    returning
+      value(RESULT) type STRING .
+  methods INIT_ALV
+    importing
+      !REPORT type SYREPID
+      !GUI_STATUS type SYPFKEY
+    raising
+      CX_SALV_ERROR .
+  methods INIT_ALV_COLUMNS
+    raising
+      CX_SALV_DATA_ERROR
+      CX_SALV_NOT_FOUND .
+  methods IS_DATA_FOR_END_OF_PERIOD_ONLY
+    returning
+      value(RESULT) type ABAP_BOOL .
+  methods IS_PY_DATA_MODE
+    returning
+      value(RESULT) type ABAP_BOOL .
+  methods GET_QUOTA_ENTITLEMENT
+    importing
+      !P2006 type P2006
+    returning
+      value(RESULT) type P2006-ANZHL .
+ENDCLASS.
+
+
+
+CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PY_PROVIDER_APP->ADD_EMPLOYEE_DATA
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] PERNR                          TYPE        PERNR-PERNR
+* | [--->] P0001S                         TYPE        TT_P0001
+* | [--->] P0002                          TYPE        P0002
+* | [--->] P0007S                         TYPE        TT_P0007
+* | [--->] P0008S                         TYPE        TT_P0008
+* | [--->] P0015S                         TYPE        TT_P0015
+* | [--->] P2012S                         TYPE        TT_P2012
+* | [--->] P0032                          TYPE        P0032
+* | [--->] P0130S                         TYPE        TT_P0130
+* | [--->] P2006                          TYPE        P2006
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD add_employee_data.
+
+    DATA b2_cluster           TYPE hrf_tim_b2.
+    DATA periods              TYPE tt_periods.
+    DATA first_period         TYPE ts_period.
+    DATA last_period          TYPE ts_period.
+    DATA period               TYPE ts_period.
+    DATA p0001                TYPE p0001.
+    DATA p0008                TYPE p0008.
+    DATA p0007                TYPE p0007.
+    DATA p0130                TYPE p0130.
+    DATA period_valid         TYPE abap_bool.
+    DATA p0007_valid          TYPE abap_bool.
+    DATA p0008_valid          TYPE abap_bool.
+    DATA begda                TYPE begda.
+    DATA endda                TYPE endda.
+    DATA evaluated_wage_types TYPE tt_pbwla.
+    DATA hourly_rate          TYPE pbwla-betrg.
+    DATA overtime_number      TYPE ptr_f_zl-anzhl.
+    DATA hours_reset_number   TYPE ptr_f_zl-anzhl.
+    DATA forced_payment_date  TYPE ptr_f_zl-datum.
+    DATA message_handler      TYPE REF TO cl_hrpa_message_list.
+    DATA row                  TYPE REF TO data.
+
+    FIELD-SYMBOLS <colors> TYPE lvc_t_scol.
+
+    IF me->params-payroll_begda IS NOT INITIAL AND
+       me->params-payroll_endda IS NOT INITIAL.
+      b2_cluster = me->get_b2_cluster( pernr ).
+
+      " Do not calculate periods on B2 ZL '9EOP - Tech:End of time period' wage type
+      " periods = me->build_periods( b2_cluster ).
+
+      " Period is built based on the T511K table.
+      INSERT VALUE #( begda = me->params-payroll_begda
+                      endda = me->params-payroll_endda
+                      end   = me->params-payroll_endda ) INTO TABLE periods.
+    ELSE.
+      INSERT VALUE #( begda = me->params-begda
+                      endda = me->params-endda
+                      end   = me->params-endda ) INTO TABLE periods.
+    ENDIF.
+
+    first_period = VALUE #( periods[ 1 ] ).
+    last_period  = VALUE #( periods[ lines( periods ) ] ).
+
+    PROVIDE FIELDS * FROM periods INTO period VALID period_valid
+                                  BOUNDS begda AND endda
+            FIELDS * FROM p0007s  INTO p0007 VALID p0007_valid
+                                  BOUNDS begda AND endda
+            FIELDS * FROM p0008s  INTO p0008 VALID p0008_valid
+                                  BOUNDS begda AND endda
+           BETWEEN first_period-begda AND last_period-endda.
+
+      begda = COND #( WHEN p0008_valid EQ abap_true THEN p0008-begda
+                      WHEN p0007_valid EQ abap_true THEN p0007-begda
+                      ELSE period-begda ).
+
+      endda = COND #( WHEN p0008_valid EQ abap_true THEN p0008-endda
+                      WHEN p0007_valid EQ abap_true THEN p0007-endda
+                      ELSE period-endda ).
+
+      IF me->params-data_for_end_of_period EQ abap_true AND endda NE period-end.
+        CONTINUE.
+      ENDIF.
+
+      p0001 = me->get_last_p0001( p0001s = p0001s
+                                  begda  = period-begda
+                                  endda  = period-endda ).
+
+      p0130 = me->get_last_p0130( p0130s = p0130s
+                                  begda  = period-begda
+                                  endda  = period-endda ).
+
+      row = me->create_row( ).
+
+      IF me->params-data_for_end_of_period EQ abap_false AND endda NE period-end.
+        ASSIGN row->('COLOR') TO <colors>.
+        IF sy-subrc EQ 0.
+          " Add row color if data does not overlap end of period!
+          INSERT VALUE #( color = VALUE #( col = 3 int = 0 inv = 1 ) ) INTO TABLE <colors>.
+        ENDIF.
+      ENDIF.
+
+      ASSIGN row->('END_OF_PERIOD') TO FIELD-SYMBOL(<end_of_period>).
+      IF sy-subrc EQ 0.
+        <end_of_period> = period-end.
+      ENDIF.
+
+      ASSIGN row->('IS_IT0130_LOCKED') TO FIELD-SYMBOL(<is_it0130_locked>).
+      IF sy-subrc EQ 0.
+        <is_it0130_locked> = COND abap_bool( WHEN p0130-reldt >= period-endda THEN abap_true
+                                                                              ELSE abap_false ).
+
+        ASSIGN row->('IT0130_LOCKED') TO FIELD-SYMBOL(<it0130_locked>).
+        IF sy-subrc EQ 0.
+          <it0130_locked> = SWITCH string( <is_it0130_locked> WHEN abap_true THEN me->icon( icon = icon_locked
+                                                                                            info = |Locked until { p0130-reldt DATE = ENVIRONMENT }| )
+                                                                             ELSE me->icon( icon_unlocked ) ).
+        ENDIF.
+      ENDIF.
+
+      ASSIGN row->('PERNR') TO FIELD-SYMBOL(<pernr>).
+      IF sy-subrc EQ 0.
+        <pernr> = pernr.
+      ENDIF.
+
+      ASSIGN row->('SNAME') TO FIELD-SYMBOL(<sname>).
+      IF sy-subrc EQ 0.
+        <sname> = |{ p0002-vorna } { p0002-nachn }|.
+      ENDIF.
+
+      ASSIGN row->('PNALT') TO FIELD-SYMBOL(<pnalt>).
+      IF sy-subrc EQ 0.
+        <pnalt> = p0032-pnalt.
+      ENDIF.
+
+      ASSIGN row->('WERKS') TO FIELD-SYMBOL(<werks>).
+      IF sy-subrc EQ 0.
+        <werks> = p0001-werks.
+      ENDIF.
+
+      ASSIGN row->('POSITION') TO FIELD-SYMBOL(<position>).
+      IF sy-subrc EQ 0.
+        <position> = me->get_position_text( id    = p0001-plans
+                                            begda = p0001-endda
+                                            endda = p0001-endda ).
+      ENDIF.
+
+      ASSIGN row->('BEGDA') TO FIELD-SYMBOL(<begda>).
+      IF sy-subrc EQ 0.
+        <begda> = begda.
+      ENDIF.
+
+      ASSIGN row->('ENDDA') TO FIELD-SYMBOL(<endda>).
+      IF sy-subrc EQ 0.
+        <endda> = endda.
+      ENDIF.
+
+      evaluated_wage_types = me->get_evaluated_wage_types( pernr  = pernr
+                                                           begda  = p0008-begda
+                                                           endda  = p0008-endda
+                                                           p0001s = p0001s
+                                                           p0007s = p0007s
+                                                           p0008s = p0008s ).
+
+      ASSIGN row->('MONTHLY_SALARY') TO FIELD-SYMBOL(<monthly_salary>).
+      IF sy-subrc EQ 0.
+        <monthly_salary> = me->get_monthly_salary( evaluated_wage_types ).
+      ENDIF.
+
+      ASSIGN row->('CURRENCY_SALARY') TO FIELD-SYMBOL(<currency_salary>).
+      IF sy-subrc EQ 0.
+        <currency_salary> = p0008-waers.
+      ENDIF.
+
+      DATA(bonus_p0015) = VALUE #( p0015s[ lgart = me->params-wage_type-bonus_payout ] OPTIONAL ).
+      ASSIGN row->('BONUS_PAYOUT') TO FIELD-SYMBOL(<bonus_payout>).
+      IF sy-subrc EQ 0.
+        <bonus_payout> = bonus_p0015-betrg.
+      ENDIF.
+
+      ASSIGN row->('CURRENCY_BONUS') TO FIELD-SYMBOL(<currency_bonus>).
+      IF sy-subrc EQ 0.
+        <currency_bonus> = bonus_p0015-waers.
+      ENDIF.
+
+      DATA(empl_discount_p0015) = VALUE #( p0015s[ lgart = me->params-wage_type-empl_discount ] OPTIONAL ).
+      ASSIGN row->('EMPL_DISCOUNT') TO FIELD-SYMBOL(<empl_discount>).
+      IF sy-subrc EQ 0.
+        <empl_discount> = empl_discount_p0015-betrg.
+      ENDIF.
+
+      ASSIGN row->('CURRENCY_EMPL_DISCOUNT') TO FIELD-SYMBOL(<currency_empl_discount>).
+      IF sy-subrc EQ 0.
+        <currency_empl_discount> = empl_discount_p0015-waers.
+      ENDIF.
+
+      ASSIGN row->('TIME_TRANSFER') TO FIELD-SYMBOL(<time_transfer>).
+      IF me->params-time_transfer_subtype IS NOT INITIAL.
+        DATA time_transfer_p2012 TYPE p2012.
+        CLEAR time_transfer_p2012.
+        LOOP AT p2012s INTO time_transfer_p2012
+          WHERE subty = me->params-time_transfer_subtype
+            AND begda <= period-endda
+            AND endda >= period-begda.
+          EXIT.
+        ENDLOOP.
+        <time_transfer> = time_transfer_p2012-anzhl.
+      ENDIF.
+
+      ASSIGN row->('WEEKLY_HOURS') TO FIELD-SYMBOL(<weekly_hours>).
+      IF sy-subrc EQ 0.
+        <weekly_hours> = p0007-wostd.
+      ENDIF.
+
+      IF period-endda EQ period-end.
+        message_handler = NEW #( ).
+
+        ASSIGN row->('HIRING_DATE') TO FIELD-SYMBOL(<hiring_date>).
+        IF sy-subrc EQ 0.
+          <hiring_date> = me->get_hiring_date( pernr           = p0001-pernr
+                                               message_handler = message_handler ).
+        ENDIF.
+
+        ASSIGN row->('ENDING_DATE') TO FIELD-SYMBOL(<ending_date>).
+        IF sy-subrc EQ 0.
+          <ending_date> = me->get_leaving_date( pernr              = p0001-pernr
+                                                selection_end_date = CONV #( period-end + 1 )
+                                                message_handler    = message_handler ).
+        ENDIF.
+
+        IF me->params-vacation_for_leavers NE abap_true OR <ending_date> IS ASSIGNED AND <ending_date> IS NOT INITIAL.
+          ASSIGN row->('VACATION_BALANCE') TO FIELD-SYMBOL(<vacation_balance>).
+          IF sy-subrc EQ 0.
+            <vacation_balance> = me->calculate_vacation_balance( p2006 ).
+          ENDIF.
+
+          ASSIGN row->('VACATION_ENTITLEMENT') TO FIELD-SYMBOL(<vacation_entitlement>).
+          IF sy-subrc EQ 0.
+            <vacation_entitlement> = me->get_quota_entitlement( p2006 ).
+          ENDIF.
+        ENDIF.
+
+
+        " Get date for the forced payment from the tech.wage type '9PAY'
+        forced_payment_date = me->get_forced_payment_date( b2_cluster ).
+
+        " B2 Cluster data/calculations only for a time frame that contains period end!
+        overtime_number = me->get_overtime_number( b2_cluster = b2_cluster
+                                                   date       = COND #( WHEN forced_payment_date IS NOT INITIAL
+                                                                        THEN forced_payment_date
+                                                                        ELSE period-end ) ).
+
+        ASSIGN row->('OVERTIME_NUMBER') TO FIELD-SYMBOL(<overtime_number>).
+        IF sy-subrc EQ 0.
+          <overtime_number> = overtime_number.
+        ENDIF.
+
+        hourly_rate = me->get_hourly_rate( evaluated_wage_types ).
+
+        ASSIGN row->('OVERTIME_PAY') TO FIELD-SYMBOL(<overtime_pay>).
+        IF sy-subrc EQ 0.
+          <overtime_pay> = me->calculate_overtime_pay( overtime_number = overtime_number
+                                                       hourly_rate     = hourly_rate ).
+        ENDIF.
+
+        ASSIGN row->('CURRENCY_OVERTIME') TO FIELD-SYMBOL(<currency_overtime>).
+        IF sy-subrc EQ 0.
+          <currency_overtime> = p0008-waers.
+        ENDIF.
+
+        hours_reset_number = me->get_hours_reset_number( b2_cluster = b2_cluster
+                                                         date       = period-end ).
+
+        ASSIGN row->('HOURS_RESET') TO FIELD-SYMBOL(<hours_reset>).
+        IF sy-subrc EQ 0.
+          <hours_reset> = hours_reset_number.
+        ENDIF.
+
+        ASSIGN row->('HOURS_COST') TO FIELD-SYMBOL(<hours_cost>).
+        IF sy-subrc EQ 0.
+          <hours_cost> = me->calculate_hours_cost( hours_reset_number = hours_reset_number
+                                                   hourly_rate        = hourly_rate ).
+        ENDIF.
+
+        ASSIGN row->('CURRENCY_HOURS') TO FIELD-SYMBOL(<currency_hours>).
+        IF sy-subrc EQ 0.
+          <currency_hours> = p0008-waers.
+        ENDIF.
+      ENDIF.
+
+      me->add_row( row ).
+    ENDPROVIDE.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->ADD_ROW
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] ROW                            TYPE REF TO DATA
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD add_row.
+
+    FIELD-SYMBOLS <data> TYPE STANDARD TABLE.
+    FIELD-SYMBOLS <row>  TYPE any.
+
+    ASSIGN me->data->* TO <data>.
+    ASSIGN row->*      TO <row>.
+
+    INSERT <row> INTO TABLE <data>.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->BUILD_DYNAMIC_TABLE
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RESULT                         TYPE REF TO DATA
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD build_dynamic_table.
+
+    cl_alv_table_create=>create_dynamic_table(
+      EXPORTING
+        it_fieldcatalog           = me->build_field_catalog( )
+      IMPORTING
+        ep_table                  = result
+      EXCEPTIONS
+        generate_subpool_dir_full = 1
+        OTHERS                    = 2 ).
+
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                 WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->BUILD_FIELD_CATALOG
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RESULT                         TYPE        LVC_T_FCAT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD build_field_catalog.
+
+    result = VALUE #(
+      ( fieldname = 'END_OF_PERIOD'     ref_table = 'PTR_F_ZL' ref_field = 'DATUM' )
+      ( fieldname = 'PERNR'             ref_table = 'PA0000'   ref_field = 'PERNR' )
+      ( fieldname = 'IT0130_LOCKED'     icon      = abap_true
+                                        inttype   = 'C'
+                                        intlen    = '40'   )
+      ( fieldname = 'IS_IT0130_LOCKED'  checkbox  = abap_true                      )
+      ( fieldname = 'BEGDA'             ref_table = 'PA0008'   ref_field = 'BEGDA' )
+      ( fieldname = 'ENDDA'             ref_table = 'PA0008'   ref_field = 'ENDDA' )
+      ( fieldname = 'SNAME'             ref_table = 'PA0001'   ref_field = 'SNAME' )
+      ( fieldname = 'PNALT'             ref_table = 'PA0032'   ref_field = 'PNALT' )
+      ( fieldname = 'WERKS'             ref_table = 'PA0001'   ref_field = 'WERKS' )
+      ( fieldname = 'POSITION'          ref_table = 'P1000'    ref_field = 'STEXT' )
+      ( fieldname = 'HIRING_DATE'       ref_table = 'PA0001'   ref_field = 'BEGDA' )
+      ( fieldname = 'ENDING_DATE'       ref_table = 'PA0001'   ref_field = 'ENDDA' )
+      ( fieldname = 'VARIABLES'                                                    )
+      ( fieldname = 'OVERTIME_NUMBER'   ref_table = 'PTR_F_ZL' ref_field = 'ANZHL' )
+      ( fieldname = 'OVERTIME_PAY'      ref_table = 'PA0008'   ref_field = 'BET01' )
+      ( fieldname = 'CURRENCY_OVERTIME' ref_table = 'PA0008'   ref_field = 'WAERS' )
+      ( fieldname = 'HOURS_RESET'       ref_table = 'PC2B5'    ref_field = 'ANZHL' )
+      ( fieldname = 'HOURS_COST'        ref_table = 'PA0008'   ref_field = 'BET01' )
+      ( fieldname = 'CURRENCY_HOURS'    ref_table = 'PA0008'   ref_field = 'WAERS' )
+      ( fieldname = 'VACATION_ENTITLEMENT'  ref_table = 'PA2006'   ref_field = 'ANZHL' )
+      ( fieldname = 'VACATION_BALANCE'  ref_table = 'PA2006'   ref_field = 'ANZHL' )
+      ( fieldname = 'MONTHLY_SALARY'    ref_table = 'PA0008'   ref_field = 'BET01' )
+      ( fieldname = 'CURRENCY_SALARY'   ref_table = 'PA0008'   ref_field = 'WAERS' )
+      ( fieldname = 'BONUS_PAYOUT'      ref_table = 'PA0015'   ref_field = 'BETRG' )
+      ( fieldname = 'CURRENCY_BONUS'    ref_table = 'PA0015'   ref_field = 'WAERS' )
+      ( fieldname = 'EMPL_DISCOUNT'     ref_table = 'PA0015'   ref_field = 'BETRG' )
+      ( fieldname = 'CURRENCY_EMPL_DISCOUNT'     ref_table = 'PA0015'   ref_field = 'WAERS' )
+      ( fieldname = 'TIME_TRANSFER'     ref_table = 'PA2012'   ref_field = 'ANZHL' )
+      ( fieldname = 'WEEKLY_HOURS'      ref_table = 'PA0007'   ref_field = 'WOSTD' )
+      ( fieldname = 'COLOR'             ref_table = 'ZHR_PY_S_ALV_CELL_COLOR'
+                                        ref_field = 'COLOR' )
+    ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->BUILD_PERIODS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] B2_CLUSTER                     TYPE        HRF_TIM_B2
+* | [<-()] RESULT                         TYPE        TT_PERIODS
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD build_periods.
+
+    DATA periods TYPE tt_periods.
+
+    " Build unique table of periods (endda = ZL-date)
+    periods = VALUE #( FOR GROUPS date OF <zl> IN b2_cluster-ft_zl
+                       GROUP BY <zl>-datum WITHOUT MEMBERS ( end = date ) ).
+
+    " Update periods with begin date
+    DO lines( periods ) TIMES.
+      DATA(index) = sy-index.
+
+      DATA(current)  = REF #( periods[ index ] ).
+      DATA(previous) = REF #( periods[ index - 1 ] OPTIONAL ).
+
+      current->begda = COND #( WHEN previous IS NOT BOUND THEN me->params-payroll_begda
+                                                          ELSE previous->endda + 1 ).
+      current->endda = current->end.
+    ENDDO.
+
+    result = periods.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->CALCULATE_HOURS_COST
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] HOURS_RESET_NUMBER             TYPE        PTR_F_ZL-ANZHL
+* | [--->] HOURLY_RATE                    TYPE        PBWLA-BETRG
+* | [<-()] RESULT                         TYPE        PBWLA-BETRG
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD calculate_hours_cost.
+
+    result = hours_reset_number * hourly_rate.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->CALCULATE_OVERTIME_PAY
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] OVERTIME_NUMBER                TYPE        PTR_F_ZL-ANZHL
+* | [--->] HOURLY_RATE                    TYPE        PBWLA-BETRG
+* | [<-()] RESULT                         TYPE        PBWLA-BETRG
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD calculate_overtime_pay.
+
+    result = overtime_number * hourly_rate.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->CALCULATE_VACATION_BALANCE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] P2006                          TYPE        P2006
+* | [<-()] RESULT                         TYPE        P2006-ANZHL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD calculate_vacation_balance.
+
+    result = p2006-anzhl - p2006-kverb.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Static Public Method ZCL_PY_PROVIDER_APP=>CREATE
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RESULT                         TYPE REF TO ZCL_PY_PROVIDER_APP
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD create.
+
+    IF zcl_py_provider_app=>self IS NOT BOUND.
+      zcl_py_provider_app=>self = NEW #( ).
+    ENDIF.
+
+    result = zcl_py_provider_app=>self.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->CREATE_ROW
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] ROW                            TYPE REF TO DATA
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD create_row.
+
+    FIELD-SYMBOLS <data> TYPE STANDARD TABLE.
+    FIELD-SYMBOLS <row>  TYPE any.
+
+    ASSIGN me->data->* TO <data>.
+
+    CREATE DATA row LIKE LINE OF <data>.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PY_PROVIDER_APP->F4_LAYOUTS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] RESTRICTION                    TYPE        SALV_DE_LAYOUT_RESTRICTION (default =IF_SALV_C_LAYOUT=>RESTRICT_NONE)
+* | [<-()] RESULT                         TYPE        DISVARIANT-VARIANT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD f4_layouts.
+
+    DATA: layout TYPE salv_s_layout_info,
+          key    TYPE salv_s_layout_key.
+
+    key-report = sy-cprog.
+
+    layout = cl_salv_layout_service=>f4_layouts( s_key    = key
+                                                 restrict = restriction ).
+
+    result = layout-layout.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_B2_CLUSTER
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] PERNR                          TYPE        PERNR_D
+* | [<-()] RESULT                         TYPE        HRF_TIM_B2
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_b2_cluster.
+
+    CALL FUNCTION 'HR_FORMS_TIM_GET_B2_RESULTS'
+      EXPORTING
+        pernr                 = pernr
+        begda                 = me->params-payroll_begda
+        endda                 = me->params-payroll_endda
+*       periods               =
+      IMPORTING
+        tim_b2                = result
+      EXCEPTIONS
+        wrong_cluster_version = 1
+        no_read_authority     = 2
+        cluster_archived      = 3
+        technical_error       = 4
+        OTHERS                = 5.
+
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                 WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+
+    DELETE result-ft_zl WHERE datum < me->params-payroll_begda
+                           OR datum > me->params-payroll_endda.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PY_PROVIDER_APP->GET_DEFAULT_LAYOUT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] RESTRICTION                    TYPE        SALV_DE_LAYOUT_RESTRICTION (default =IF_SALV_C_LAYOUT=>RESTRICT_NONE)
+* | [<-()] RESULT                         TYPE        DISVARIANT-VARIANT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_default_layout.
+
+    DATA: layout TYPE salv_s_layout_info,
+          key    TYPE salv_s_layout_key.
+
+    key-report = sy-cprog.
+
+    layout = cl_salv_layout_service=>get_default_layout( s_key    = key
+                                                         restrict = restriction ).
+
+    result = layout-layout.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_EVALUATED_WAGE_TYPES
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] PERNR                          TYPE        P0008-PERNR
+* | [--->] BEGDA                          TYPE        BEGDA
+* | [--->] ENDDA                          TYPE        ENDDA
+* | [--->] P0001S                         TYPE        TT_P0001
+* | [--->] P0007S                         TYPE        TT_P0007
+* | [--->] P0008S                         TYPE        TT_P0008
+* | [<-()] RESULT                         TYPE        TT_PBWLA
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_evaluated_wage_types.
+
+    DATA ppbwla TYPE tt_pbwla.
+
+    CALL FUNCTION 'RP_FILL_WAGE_TYPE_TABLE'
+      EXPORTING
+        begda                        = begda
+        endda                        = endda
+        pernr                        = pernr
+      TABLES
+        ppbwla                       = ppbwla
+        pp0001                       = p0001s
+        pp0007                       = p0007s
+        pp0008                       = p0008s
+      EXCEPTIONS
+        error_at_indirect_evaluation = 1
+        OTHERS                       = 2.
+
+    IF sy-subrc EQ 0.
+      result[] = ppbwla[].
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_FORCED_PAYMENT_DATE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] B2_CLUSTER                     TYPE        HRF_TIM_B2
+* | [<-()] RESULT                         TYPE        PTR_F_ZL-DATUM
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_forced_payment_date.
+
+    DATA(zl) = VALUE #( b2_cluster-ft_zl[ lgart = c-wage_type-forced_payment ] OPTIONAL ).
+
+    result = zl-datum.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_HIRING_DATE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] PERNR                          TYPE        P0001-PERNR
+* | [--->] MESSAGE_HANDLER                TYPE REF TO IF_HRPA_MESSAGE_HANDLER
+* | [<-()] RESULT                         TYPE        BEGDA
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_hiring_date.
+
+    CALL FUNCTION 'HR_ECM_GET_HIRE_DATE'
+      EXPORTING
+        pernr           = pernr
+        message_handler = message_handler
+      IMPORTING
+        hire_date       = result.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_HOURLY_RATE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] EVALUATED_WAGE_TYPES           TYPE        TT_PBWLA
+* | [<-()] RESULT                         TYPE        PBWLA-BETRG
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_hourly_rate.
+
+    DATA(evaluated_wage_type) = VALUE #( evaluated_wage_types[ lgart = me->params-wage_type-overtime_pay ] OPTIONAL ).
+
+    result = evaluated_wage_type-betrg.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_HOURS_RESET_NUMBER
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] B2_CLUSTER                     TYPE        HRF_TIM_B2
+* | [--->] DATE                           TYPE        PTR_F_ZL-DATUM
+* | [<-()] RESULT                         TYPE        PTR_F_SALDO-ANZHL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_hours_reset_number.
+
+    result = me->get_zl_number( b2_cluster = b2_cluster
+                                wage_type  = me->params-wage_type-hours_reset
+                                date       = date ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_LAST_P0001
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] P0001S                         TYPE        TT_P0001
+* | [--->] BEGDA                          TYPE        BEGDA
+* | [--->] ENDDA                          TYPE        ENDDA
+* | [<-()] RESULT                         TYPE        P0001
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_last_p0001.
+
+    DATA(filtered) = FILTER #( p0001s USING KEY period WHERE begda <= endda AND endda >= begda ).
+
+    IF filtered[] IS NOT INITIAL.
+      result = VALUE #( filtered[ KEY period INDEX lines( filtered ) ] ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_LAST_P0130
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] P0130S                         TYPE        TT_P0130
+* | [--->] BEGDA                          TYPE        BEGDA
+* | [--->] ENDDA                          TYPE        ENDDA
+* | [<-()] RESULT                         TYPE        P0001
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_last_p0130.
+
+    DATA(filtered) = FILTER #( p0130s USING KEY period WHERE begda <= endda AND endda >= begda ).
+
+    IF filtered[] IS NOT INITIAL.
+      result = VALUE #( filtered[ KEY period INDEX lines( filtered ) ] ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_LEAVING_DATE
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] PERNR                          TYPE        P0001-PERNR
+* | [--->] SELECTION_END_DATE             TYPE        ENDDA
+* | [--->] MESSAGE_HANDLER                TYPE REF TO IF_HRPA_MESSAGE_HANDLER
+* | [<-()] RESULT                         TYPE        ENDDA
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_leaving_date.
+
+    CALL FUNCTION 'HR_ECM_GET_LEAVING_DATE'
+      EXPORTING
+        pernr              = pernr
+        selection_end_date = selection_end_date
+        message_handler    = message_handler
+      IMPORTING
+        leaving_date       = result.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_MONTHLY_SALARY
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] EVALUATED_WAGE_TYPES           TYPE        TT_PBWLA
+* | [<-()] RESULT                         TYPE        PBWLA-BETRG
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_monthly_salary.
+
+    DATA(evaluated_wage_type) = VALUE #( evaluated_wage_types[ lgart = me->params-wage_type-salary ] OPTIONAL ).
+
+    result = evaluated_wage_type-betrg.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_OVERTIME_NUMBER
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] B2_CLUSTER                     TYPE        HRF_TIM_B2
+* | [--->] DATE                           TYPE        PTR_F_ZL-DATUM
+* | [<-()] RESULT                         TYPE        PTR_F_ZL-ANZHL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_overtime_number.
+
+    result = me->get_zl_number( b2_cluster = b2_cluster
+                                wage_type  = me->params-wage_type-overtime_number
+                                date       = date ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_POSITION_TEXT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] ID                             TYPE        P1000-OBJID
+* | [--->] BEGDA                          TYPE        P1000-BEGDA
+* | [--->] ENDDA                          TYPE        P1000-ENDDA
+* | [<-()] RESULT                         TYPE        P1000-STEXT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_position_text.
+
+    DATA p1000s TYPE hrbas_t_p1000.
+
+    CALL FUNCTION 'RH_READ_HRP_OBJECT_TEXT'
+      EXPORTING
+        act_otype       = 'S'
+        act_objid       = id
+        act_plvar       = '01'
+        act_begda       = begda
+        act_endda       = endda
+      TABLES
+        act_p1000       = p1000s
+      EXCEPTIONS
+        no_data_found   = 1
+        no_valid_object = 2
+        OTHERS          = 3.
+
+    IF sy-subrc EQ 0.
+      DATA(p1000) = VALUE #( p1000s[ langu = sy-langu ] OPTIONAL ).
+
+      IF p1000 IS INITIAL.
+        p1000 = VALUE #( p1000s[ langu = 'EN' ] OPTIONAL ).
+      ENDIF.
+
+      result = p1000-stext.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_QUOTA_ENTITLEMENT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] P2006                          TYPE        P2006
+* | [<-()] RESULT                         TYPE        P2006-ANZHL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method GET_QUOTA_ENTITLEMENT.
+    result = p2006-anzhl.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_ZL_NUMBER
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] B2_CLUSTER                     TYPE        HRF_TIM_B2
+* | [--->] WAGE_TYPE                      TYPE        LGART
+* | [--->] DATE                           TYPE        PTR_F_ZL-DATUM
+* | [<-()] RESULT                         TYPE        PTR_F_ZL-ANZHL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD get_zl_number.
+
+    DATA(zl) = VALUE #( b2_cluster-ft_zl[ datum = date
+                                          lgart = wage_type ] OPTIONAL ).
+
+    result = zl-anzhl.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->ICON
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] ICON                           TYPE        ICON-ID
+* | [--->] TEXT                           TYPE        STRING(optional)
+* | [--->] INFO                           TYPE        STRING(optional)
+* | [<-()] RESULT                         TYPE        STRING
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD icon.
+
+    CALL FUNCTION 'ICON_CREATE'
+      EXPORTING
+        name                  = icon
+        text                  = text
+        info                  = info
+        add_stdinf            = ''
+      IMPORTING
+        result                = result
+      EXCEPTIONS
+        icon_not_found        = 1
+        outputfield_too_short = 2
+        OTHERS                = 3.
+
+    IF sy-subrc <> 0.
+      CLEAR result.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->INIT_ALV
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] REPORT                         TYPE        SYREPID
+* | [--->] GUI_STATUS                     TYPE        SYPFKEY
+* | [!CX!] CX_SALV_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD init_alv.
+
+    FIELD-SYMBOLS <data> TYPE STANDARD TABLE.
+
+    ASSIGN data->* TO <data>.
+
+    cl_salv_table=>factory( IMPORTING r_salv_table = me->alv
+                             CHANGING t_table      = <data> ).
+
+    me->alv->get_functions( )->set_all( abap_true ).
+
+    me->alv->set_screen_status( report        = report
+                                pfstatus      = gui_status
+                                set_functions = me->alv->c_functions_all ).
+
+    me->alv->get_layout( )->set_key( VALUE #( report = sy-cprog ) ).
+    me->alv->get_layout( )->set_save_restriction( if_salv_c_layout=>restrict_none ).
+    me->alv->get_layout( )->set_default( abap_true ).
+    me->alv->get_layout( )->set_initial_layout( me->params-layout ).
+
+    me->alv->get_display_settings( )->set_striped_pattern( if_salv_c_bool_sap=>false ).
+    me->alv->get_display_settings( )->set_fit_column_to_table_size( abap_false ).
+
+    me->alv->get_selections( )->set_selection_mode( if_salv_c_selection_mode=>row_column ).
+
+    me->init_alv_columns( ).
+
+    me->event_handler = NEW #( me ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->INIT_ALV_COLUMNS
+* +-------------------------------------------------------------------------------------------------+
+* | [!CX!] CX_SALV_DATA_ERROR
+* | [!CX!] CX_SALV_NOT_FOUND
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD init_alv_columns.
+
+    DATA columns TYPE REF TO cl_salv_columns_table.
+
+    columns = me->alv->get_columns( ).
+    columns->set_optimize( abap_true ).
+
+    LOOP AT columns->get( ) REFERENCE INTO DATA(column).
+      CASE column->columnname.
+        WHEN 'END_OF_PERIOD'.
+          column->r_column->set_short_text( 'Period End' ).
+          column->r_column->set_medium_text( 'End of period' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+          CAST cl_salv_column_table( column->r_column )->set_key( if_salv_c_bool_sap=>true ).
+
+        WHEN 'PERNR'.
+          column->r_column->set_medium_text( 'Personal Number' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+          CAST cl_salv_column_table( column->r_column )->set_key( if_salv_c_bool_sap=>true ).
+
+        WHEN 'IT0130_LOCKED'.
+          column->r_column->set_short_text( 'Locked' ).
+          column->r_column->set_medium_text( 'IT0130 Locked' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+          CAST cl_salv_column_table( column->r_column )->set_icon( if_salv_c_bool_sap=>true ).
+
+        WHEN 'SNAME'.
+          column->r_column->set_short_text( 'Pers.Name' ).
+          column->r_column->set_medium_text( 'Name and Surname' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'PNALT'.
+          column->r_column->set_short_text( 'PY No.' ).
+          column->r_column->set_medium_text( 'Payroll nbr' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'WERKS'.
+          column->r_column->set_medium_text( 'Personal Area' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'POSITION'.
+          column->r_column->set_short_text( 'Position' ).
+          column->r_column->set_medium_text( column->r_column->get_short_text( ) ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'HIRING_DATE'.
+          column->r_column->set_short_text( 'HiringDate' ).
+          column->r_column->set_medium_text( 'Hiring date' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'ENDING_DATE'.
+          column->r_column->set_short_text( 'EndingDate' ).
+          column->r_column->set_medium_text( 'Ending Date' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'BEGDA'.
+          column->r_column->set_short_text( 'Begin' ).
+          column->r_column->set_medium_text( 'Infotype begin date' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+          column->r_column->set_visible( boolc( me->params-data_for_end_of_period EQ abap_false ) ).
+
+        WHEN 'ENDDA'.
+          column->r_column->set_short_text( 'End' ).
+          column->r_column->set_medium_text( 'Infotype end date' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+          column->r_column->set_visible( boolc( me->params-data_for_end_of_period EQ abap_false ) ).
+
+        WHEN 'VARIABLES'.
+          column->r_column->set_short_text( 'Variables' ).
+
+        WHEN 'OVERTIME_NUMBER'.
+          column->r_column->set_short_text( 'Overtime' ).
+          column->r_column->set_medium_text( column->r_column->get_short_text( ) ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'OVERTIME_PAY'.
+          column->r_column->set_short_text( 'Ovrt.Pay' ).
+          column->r_column->set_medium_text( 'Overtime pay' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+          column->r_column->set_currency_column( 'CURRENCY_OVERTIME' ).
+
+        WHEN 'CURRENCY_OVERTIME'.
+          column->r_column->set_short_text( 'Ovrt.Curr.' ).
+          column->r_column->set_medium_text( 'Overtime currency' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'HOURS_RESET'.
+          column->r_column->set_short_text( 'Carryover' ).
+          column->r_column->set_medium_text( 'Carryover Hours' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'HOURS_COST'.
+          column->r_column->set_short_text( 'Hours Cost' ).
+          column->r_column->set_medium_text( column->r_column->get_short_text( ) ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+          column->r_column->set_currency_column( 'CURRENCY_HOURS' ).
+
+        WHEN 'CURRENCY_HOURS'.
+          column->r_column->set_short_text( 'HoursCurr.' ).
+          column->r_column->set_medium_text( 'Hours Cost currency' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'VACATION_ENTITLEMENT'.
+          column->r_column->set_short_text( 'Vac.Ent.' ).
+          column->r_column->set_medium_text( 'Vac. entitlement' ).
+          column->r_column->set_long_text( 'Vacation entitlement' ).
+
+        WHEN 'VACATION_BALANCE'.
+          column->r_column->set_short_text( 'Vac.Bal.' ).
+          column->r_column->set_medium_text( 'Curr. vac. balance' ).
+          column->r_column->set_long_text( 'Current vacation balance' ).
+
+        WHEN 'MONTHLY_SALARY'.
+          column->r_column->set_short_text( 'Month.Sal.' ).
+          column->r_column->set_medium_text( 'Monthly salary' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+          column->r_column->set_currency_column( 'CURRENCY_SALARY' ).
+
+        WHEN 'CURRENCY_SALARY'.
+          column->r_column->set_short_text( 'Sal.Curr.' ).
+          column->r_column->set_medium_text( 'Salary currency' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'BONUS_PAYOUT'.
+          column->r_column->set_short_text( 'Bonus' ).
+          column->r_column->set_medium_text( 'Bonus payout' ).
+          column->r_column->set_long_text( 'Bonus Payout Information' ).
+          column->r_column->set_currency_column( 'CURRENCY_BONUS' ).
+
+        WHEN 'CURRENCY_BONUS'.
+          column->r_column->set_short_text( 'BonusCurr.' ).
+          column->r_column->set_medium_text( 'Bonus currency' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'EMPL_DISCOUNT'.
+          column->r_column->set_short_text( 'EmplDisc' ).
+          column->r_column->set_medium_text( 'Empl. discount' ).
+          column->r_column->set_long_text( 'Employee Discount Information' ).
+          column->r_column->set_currency_column( 'CURRENCY_EMPL_DISCOUNT' ).
+
+        WHEN 'CURRENCY_EMPL_DISCOUNT'.
+          column->r_column->set_short_text( 'EDiscCurr.' ).
+          column->r_column->set_medium_text( 'Empl. Disc. currency' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'TIME_TRANSFER'.
+          column->r_column->set_short_text( 'TimeTrans.' ).
+          column->r_column->set_medium_text( 'Time transfer' ).
+          column->r_column->set_long_text( 'Time Transfer (IT2012)' ).
+
+        WHEN 'WEEKLY_HOURS'.
+          column->r_column->set_short_text( 'Contr.Hrs.' ).
+          column->r_column->set_medium_text( 'Contract hours' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN OTHERS.
+          column->r_column->set_technical( abap_true ).
+      ENDCASE.
+    ENDLOOP.
+
+    columns->set_color_column( 'COLOR' ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PY_PROVIDER_APP->INIT_DYNAMIC_DATA
+* +-------------------------------------------------------------------------------------------------+
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD init_dynamic_data.
+
+    me->data = me->build_dynamic_table( ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->IS_DATA_FOR_END_OF_PERIOD_ONLY
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RESULT                         TYPE        ABAP_BOOL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD is_data_for_end_of_period_only.
+
+    result = me->params-data_for_end_of_period.
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->IS_PY_DATA_MODE
+* +-------------------------------------------------------------------------------------------------+
+* | [<-()] RESULT                         TYPE        ABAP_BOOL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD is_py_data_mode.
+
+    result = boolc( me->params-payroll_begda IS NOT INITIAL AND
+                    me->params-payroll_endda IS NOT INITIAL ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PY_PROVIDER_APP->OUTPUT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] REPORT                         TYPE        SYREPID(optional)
+* | [--->] GUI_STATUS                     TYPE        SYPFKEY (default ='SALV_TABLE_STANDARD')
+* | [!CX!] CX_SALV_ERROR
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD output.
+
+    IF me->alv IS NOT BOUND.
+      me->init_alv( report     = report
+                    gui_status = gui_status ).
+    ENDIF.
+
+    me->alv->display( ).
+
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PY_PROVIDER_APP->PROGRESS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] IMMEDIATE_OUTPUT               TYPE        ABAP_BOOL (default =ABAP_FALSE)
+* | [--->] TOTAL                          TYPE        I(optional)
+* | [--->] PROCESSED                      TYPE        I(optional)
+* | [--->] TEXT                           TYPE        ANY
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD progress.
+    cl_progress_indicator=>progress_indicate( i_output_immediately = immediate_output
+                                              i_total              = COND #( WHEN total IS SUPPLIED THEN total )
+                                              i_processed          = COND #( WHEN processed IS SUPPLIED THEN processed )
+                                              i_text               = text ).
+  ENDMETHOD.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Public Method ZCL_PY_PROVIDER_APP->SET_PARAMS
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] BEGDA                          TYPE        BEGDA
+* | [--->] ENDDA                          TYPE        ENDDA
+* | [--->] PAYROLL_BEGDA                  TYPE        BEGDA
+* | [--->] PAYROLL_ENDDA                  TYPE        ENDDA
+* | [--->] OVERTIME_NUMBER_WAGE_TYPE      TYPE        LGART
+* | [--->] OVERTIME_PAY_WAGE_TYPE         TYPE        LGART
+* | [--->] HOURS_RESET_WAGE_TYPE          TYPE        LGART
+* | [--->] SALARY_WAGE_TYPE               TYPE        LGART
+* | [--->] BONUS_PAYOUT_WAGE_TYPE         TYPE        LGART
+* | [--->] EMPL_DISCOUNT_WAGE_TYPE        TYPE        LGART
+* | [--->] TIME_TRANSFER_SUBTYPE          TYPE        P2012-SUBTY
+* | [--->] QUOTA_TYPE                     TYPE        P2006-KTART
+* | [--->] VACATION_FOR_LEAVERS           TYPE        ABAP_BOOL
+* | [--->] DATA_FOR_END_OF_PERIOD         TYPE        ABAP_BOOL
+* | [--->] LAYOUT                         TYPE        DISVARIANT-VARIANT
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  METHOD set_params.
+
+    me->params = VALUE #( begda                  = begda
+                          endda                  = endda
+                          payroll_begda          = payroll_begda
+                          payroll_endda          = payroll_endda
+                          quota_type             = quota_type
+                          vacation_for_leavers   = vacation_for_leavers
+                          data_for_end_of_period = data_for_end_of_period
+                          layout                 = layout
+                          time_transfer_subtype  = time_transfer_subtype
+                          wage_type              = VALUE #( overtime_number = overtime_number_wage_type
+                                                            overtime_pay    = overtime_pay_wage_type
+                                                            hours_reset     = hours_reset_wage_type
+                                                            salary          = salary_wage_type
+                                                            bonus_payout    = bonus_payout_wage_type
+                                                            empl_discount   = empl_discount_wage_type ) ).
+
+  ENDMETHOD.
+ENDCLASS.

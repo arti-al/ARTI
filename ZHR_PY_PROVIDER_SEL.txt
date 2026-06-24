@@ -1,0 +1,115 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZHR_PY_PROVIDER_SEL
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN BEGIN OF BLOCK data WITH FRAME TITLE text-001.
+
+SELECTION-SCREEN BEGIN OF LINE.
+SELECTION-SCREEN COMMENT 1(31) text-002 FOR FIELD p_period.
+PARAMETERS p_period TYPE zhr_py_period AS LISTBOX VISIBLE LENGTH 26 USER-COMMAND on_py_period.
+
+SELECTION-SCREEN COMMENT 62(26) text-003 FOR FIELD p_perbeg.
+PARAMETERS p_perbeg TYPE dats OBLIGATORY.
+
+SELECTION-SCREEN END OF LINE.
+
+SELECT-OPTIONS s_pyper FOR p0008-begda NO-EXTENSION NO-DISPLAY.  " Payroll period
+
+PARAMETERS p_ovrtwt TYPE t512w-lgart OBLIGATORY.      " Overtime Wage Type
+PARAMETERS p_ovrpwt TYPE t512w-lgart OBLIGATORY.      " Overtime Pay Wage Type
+PARAMETERS p_hrrwt  TYPE t512w-lgart OBLIGATORY.      " Hours reset Wage Type
+PARAMETERS p_salwt  TYPE t512w-lgart OBLIGATORY.      " Salary Wage Type
+PARAMETERS p_bonwt TYPE t512w-lgart OBLIGATORY.       " Bonus Payout Wage Type
+PARAMETERS p_diswt TYPE t512w-lgart OBLIGATORY.       " Employee Discount Wage Type
+PARAMETERS p_quota  TYPE p2006-ktart OBLIGATORY.      " Absence quota type
+PARAMETERS p_ttran  TYPE p2012-subty.                 " Time Transfers subtype
+PARAMETERS p_vacl AS CHECKBOX.                        " Vacation for leavers only
+PARAMETERS p_endp AS CHECKBOX.                        " Data for end of period only
+SELECTION-SCREEN END OF BLOCK data.
+
+PARAMETERS p_layout LIKE disvariant-variant.
+
+INITIALIZATION.
+  p_perbeg = '20230703'.
+  periods_reader = NEW #( '08' ).
+
+  DATA(py_period_from) = p_perbeg.
+
+  PERFORM update_periods.
+
+  p_layout = zcl_py_provider_app=>create( )->get_default_layout( ).
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_layout.
+  p_layout = zcl_py_provider_app=>create( )->f4_layouts( ).
+
+AT SELECTION-SCREEN ON p_perbeg.
+  IF py_period_from NE p_perbeg.
+    CLEAR p_period.
+    CLEAR pnptimed.
+    CLEAR pnpbegda.
+    CLEAR pnpendda.
+    CLEAR pnpbegps.
+    CLEAR pnpendps.
+    py_period_from = p_perbeg.
+  ENDIF.
+
+  PERFORM update_periods.
+
+AT SELECTION-SCREEN.
+  IF p_period IS NOT INITIAL.
+    DATA(py_period) = VALUE #( py_periods[ p_period ] OPTIONAL ).
+  ENDIF.
+
+  CASE sy-ucomm.
+    WHEN 'ON_PY_PERIOD'.
+      IF py_period IS NOT INITIAL.
+        CLEAR pnptimed.
+        pnpbegda = py_period-begda.
+        pnpendda = py_period-endda.
+        pnpbegps = py_period-begda.
+        pnpendps = py_period-endda.
+      ELSE.
+        CLEAR pnptimed.
+        CLEAR pnpbegda.
+        CLEAR pnpendda.
+        CLEAR pnpbegps.
+        CLEAR pnpendps.
+      ENDIF.
+
+    WHEN OTHERS.
+      IF py_period IS NOT INITIAL.
+        s_pyper = VALUE #( sign   = 'I'
+                           option = 'BT'
+                           low    = py_period-begda
+                           high   = py_period-endda ).
+        APPEND s_pyper.
+      ELSE.
+        CLEAR s_pyper.
+        CLEAR s_pyper[].
+      ENDIF.
+
+  ENDCASE.
+
+
+FORM update_periods.
+  DATA id         TYPE vrm_id.
+  DATA vrm_values TYPE vrm_values.
+  DATA vrm_value  TYPE vrm_value.
+
+  py_periods = periods_reader->from_date( p_perbeg )->to_current( )->get( ).
+
+  vrm_values = zcl_hr_py_periods_reader=>periods2vrm( py_periods ).
+
+  INSERT VALUE #( text = 'No time data' ) INTO TABLE vrm_values.
+
+  " Set current PY period as default value
+*  vrm_value  = VALUE #( vrm_values[ lines( vrm_values ) ] ).
+*  p_period = vrm_value-key.
+
+  id = 'P_PERIOD'.
+
+  CALL FUNCTION 'VRM_SET_VALUES'
+    EXPORTING
+      id     = id
+      values = vrm_values.
+ENDFORM.

@@ -12,8 +12,10 @@ INFOTYPES: 0001,
            0002,
            0007,
            0008,
+           0015,
            0032,
            0130,
+           2012,
            2006.
 
 CONSTANTS:
@@ -23,11 +25,18 @@ CONSTANTS:
       overtime_pay    TYPE lgart VALUE '1600',
       hours_reset     TYPE lgart VALUE '2020',
       salary          TYPE lgart VALUE '1400',
+      bonus_payout    TYPE lgart VALUE '4100',
+      empl_discount   TYPE lgart VALUE '5710',
     END OF wage_type,
 
     BEGIN OF absence_quota,
       paid_holidays TYPE p2006-ktart VALUE '11',
     END OF absence_quota,
+
+    BEGIN OF time_transfers,
+      overtime_number TYPE subty VALUE 'Z002',
+    END OF time_transfers,
+
   END OF c.
 
 DATA periods_reader TYPE REF TO zcl_hr_py_periods_reader.
@@ -47,9 +56,14 @@ INITIALIZATION.
 
   p_ovrtwt = c-wage_type-overtime_number.
   p_ovrpwt = c-wage_type-overtime_pay.
-  p_hrrwt  = c-wage_type-hours_reset.
-  p_salwt  = c-wage_type-salary.
-  p_quota  = c-absence_quota-paid_holidays.
+  p_hrrwt = c-wage_type-hours_reset.
+  p_salwt = c-wage_type-salary.
+  p_bonwt = c-wage_type-bonus_payout.
+  p_diswt = c-wage_type-empl_discount.
+  p_quota = c-absence_quota-paid_holidays.
+  p_ttran = c-time_transfers-overtime_number.
+
+
 
   app = zcl_py_provider_app=>create( ).
 
@@ -62,6 +76,9 @@ START-OF-SELECTION.
                    overtime_pay_wage_type    = p_ovrpwt
                    hours_reset_wage_type     = p_hrrwt
                    salary_wage_type          = p_salwt
+                   bonus_payout_wage_type    = p_bonwt
+                   empl_discount_wage_type   = p_diswt
+                   time_transfer_subtype     = p_ttran
                    quota_type                = p_quota
                    vacation_for_leavers      = p_vacl
                    data_for_end_of_period    = p_endp
@@ -84,6 +101,8 @@ GET pernr.
                           p0002  = p0002
                           p0007s = p0007[]
                           p0008s = p0008[]
+                          p0015s = CONV #( p0015[] )
+                          p2012s = CONV #( p2012[] )
                           p0032  = p0032
                           p0130s = CONV #( p0130[] )
                           p2006  = p2006 ).
