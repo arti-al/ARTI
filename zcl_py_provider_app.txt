@@ -76,7 +76,7 @@ CLASS zcl_py_provider_app DEFINITION
         !p0007s TYPE tt_p0007
         !p0008s TYPE tt_p0008
         !p0015s TYPE tt_p0015
-        !p2012  TYPE p2012
+        !p2012s TYPE tt_p2012
         !p0032  TYPE p0032
         !p0130s TYPE tt_p0130
         !p2006  TYPE p2006 .
@@ -290,7 +290,7 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
 * | [--->] P0007S                         TYPE        TT_P0007
 * | [--->] P0008S                         TYPE        TT_P0008
 * | [--->] P0015S                         TYPE        TT_P0015
-* | [--->] P2012                          TYPE        P2012
+* | [--->] P2012S                         TYPE        TT_P2012
 * | [--->] P0032                          TYPE        P0032
 * | [--->] P0130S                         TYPE        TT_P0130
 * | [--->] P2006                          TYPE        P2006
@@ -473,11 +473,17 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
         <currency_empl_discount> = empl_discount_p0015-waers.
       ENDIF.
 
+      ASSIGN row->('TIME_TRANSFER') TO FIELD-SYMBOL(<time_transfer>).
       IF me->params-time_transfer_subtype IS NOT INITIAL.
-        ASSIGN row->('TIME_TRANSFER') TO FIELD-SYMBOL(<time_transfer>).
-        IF sy-subrc EQ 0.
-          <time_transfer> = p2012-anzhl.
-        ENDIF.
+        DATA time_transfer_p2012 TYPE p2012.
+        CLEAR time_transfer_p2012.
+        LOOP AT p2012s INTO time_transfer_p2012
+          WHERE subty = me->params-time_transfer_subtype
+            AND begda <= period-endda
+            AND endda >= period-begda.
+          EXIT.
+        ENDLOOP.
+        <time_transfer> = time_transfer_p2012-anzhl.
       ENDIF.
 
       ASSIGN row->('WEEKLY_HOURS') TO FIELD-SYMBOL(<weekly_hours>).
