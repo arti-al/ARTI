@@ -1435,13 +1435,13 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
                           vacation_for_leavers   = vacation_for_leavers
                           data_for_end_of_period = data_for_end_of_period
                           layout                 = layout
+                          time_transfer_subtype  = time_transfer_subtype
                           wage_type              = VALUE #( overtime_number = overtime_number_wage_type
                                                             overtime_pay    = overtime_pay_wage_type
                                                             hours_reset     = hours_reset_wage_type
                                                             salary          = salary_wage_type
                                                             bonus_payout    = bonus_payout_wage_type
-                                                            empl_discount   = empl_discount_wage_type  )
-                          time_transfer_subtype  = time_transfer_subtype ).
+                                                            empl_discount   = empl_discount_wage_type ) ).
 
   ENDMETHOD.
 ENDCLASS.
