@@ -78,6 +78,7 @@ START-OF-SELECTION.
                    salary_wage_type          = p_salwt
                    bonus_payout_wage_type    = p_bonwt
                    empl_discount_wage_type   = p_diswt
+                   time_transfer_subtype     = p_ttran
                    quota_type                = p_quota
                    vacation_for_leavers      = p_vacl
                    data_for_end_of_period    = p_endp
@@ -101,6 +102,7 @@ GET pernr.
                           p0007s = p0007[]
                           p0008s = p0008[]
                           p0015s = CONV #( p0015[] )
+                          p2012s = CONV #( p2012[] )
                           p0032  = p0032
                           p0130s = CONV #( p0130[] )
                           p2006  = p2006 ).

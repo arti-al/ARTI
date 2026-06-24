@@ -25,6 +25,7 @@ CLASS zcl_py_provider_app DEFINITION
           bonus_payout    TYPE lgart,
           empl_discount   TYPE lgart,
         END OF wage_type,
+        time_transfer_subtype TYPE p2012-subty,
       END OF ts_params .
     TYPES:
       tt_p0001 TYPE STANDARD TABLE OF p0001 WITH DEFAULT KEY
@@ -38,6 +39,8 @@ CLASS zcl_py_provider_app DEFINITION
                     WITH NON-UNIQUE SORTED KEY period COMPONENTS begda endda .
     TYPES:
       tt_p0015 TYPE STANDARD TABLE OF p0015 WITH DEFAULT KEY .
+    TYPES:
+      tt_p2012 TYPE STANDARD TABLE OF p2012 WITH DEFAULT KEY .
 
     TYPES:
       tt_pbwla TYPE STANDARD TABLE OF pbwla WITH DEFAULT KEY .
@@ -73,6 +76,7 @@ CLASS zcl_py_provider_app DEFINITION
         !p0007s TYPE tt_p0007
         !p0008s TYPE tt_p0008
         !p0015s TYPE tt_p0015
+        !p2012s TYPE tt_p2012
         !p0032  TYPE p0032
         !p0130s TYPE tt_p0130
         !p2006  TYPE p2006 .
@@ -111,6 +115,7 @@ CLASS zcl_py_provider_app DEFINITION
         !salary_wage_type          TYPE lgart
         !bonus_payout_wage_type    TYPE lgart
         !empl_discount_wage_type   TYPE lgart
+        !time_transfer_subtype     TYPE p2012-subty
         !quota_type                TYPE p2006-ktart
         !vacation_for_leavers      TYPE abap_bool
         !data_for_end_of_period    TYPE abap_bool
@@ -285,6 +290,7 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
 * | [--->] P0007S                         TYPE        TT_P0007
 * | [--->] P0008S                         TYPE        TT_P0008
 * | [--->] P0015S                         TYPE        TT_P0015
+* | [--->] P2012S                         TYPE        TT_P2012
 * | [--->] P0032                          TYPE        P0032
 * | [--->] P0130S                         TYPE        TT_P0130
 * | [--->] P2006                          TYPE        P2006
@@ -467,6 +473,14 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
         <currency_empl_discount> = empl_discount_p0015-waers.
       ENDIF.
 
+      IF me->params-time_transfer_subtype IS NOT INITIAL.
+        DATA(time_transfer_p2012) = VALUE #( p2012s[ subty = me->params-time_transfer_subtype ] OPTIONAL ).
+        ASSIGN row->('TIME_TRANSFER') TO FIELD-SYMBOL(<time_transfer>).
+        IF sy-subrc EQ 0.
+          <time_transfer> = time_transfer_p2012-anzhl.
+        ENDIF.
+      ENDIF.
+
       ASSIGN row->('WEEKLY_HOURS') TO FIELD-SYMBOL(<weekly_hours>).
       IF sy-subrc EQ 0.
         <weekly_hours> = p0007-wostd.
@@ -632,6 +646,7 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
       ( fieldname = 'CURRENCY_BONUS'    ref_table = 'PA0015'   ref_field = 'WAERS' )
       ( fieldname = 'EMPL_DISCOUNT'     ref_table = 'PA0015'   ref_field = 'BETRG' )
       ( fieldname = 'CURRENCY_EMPL_DISCOUNT'     ref_table = 'PA0015'   ref_field = 'WAERS' )
+      ( fieldname = 'TIME_TRANSFER'     ref_table = 'PA2012'   ref_field = 'ANZHL' )
       ( fieldname = 'WEEKLY_HOURS'      ref_table = 'PA0007'   ref_field = 'WOSTD' )
       ( fieldname = 'COLOR'             ref_table = 'ZHR_PY_S_ALV_CELL_COLOR'
                                         ref_field = 'COLOR' )
@@ -1300,6 +1315,11 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
           column->r_column->set_medium_text( 'Empl. Disc. currency' ).
           column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
 
+        WHEN 'TIME_TRANSFER'.
+          column->r_column->set_short_text( 'TimeTrans.' ).
+          column->r_column->set_medium_text( 'Time transfer' ).
+          column->r_column->set_long_text( 'Time Transfer (IT2012)' ).
+
         WHEN 'WEEKLY_HOURS'.
           column->r_column->set_short_text( 'Contr.Hrs.' ).
           column->r_column->set_medium_text( 'Contract hours' ).
@@ -1399,6 +1419,7 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
 * | [--->] SALARY_WAGE_TYPE               TYPE        LGART
 * | [--->] BONUS_PAYOUT_WAGE_TYPE         TYPE        LGART
 * | [--->] EMPL_DISCOUNT_WAGE_TYPE        TYPE        LGART
+* | [--->] TIME_TRANSFER_SUBTYPE          TYPE        P2012-SUBTY
 * | [--->] QUOTA_TYPE                     TYPE        P2006-KTART
 * | [--->] VACATION_FOR_LEAVERS           TYPE        ABAP_BOOL
 * | [--->] DATA_FOR_END_OF_PERIOD         TYPE        ABAP_BOOL
@@ -1419,7 +1440,8 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
                                                             hours_reset     = hours_reset_wage_type
                                                             salary          = salary_wage_type
                                                             bonus_payout    = bonus_payout_wage_type
-                                                            empl_discount   = empl_discount_wage_type  ) ).
+                                                            empl_discount   = empl_discount_wage_type  )
+                          time_transfer_subtype  = time_transfer_subtype ).
 
   ENDMETHOD.
 ENDCLASS.
