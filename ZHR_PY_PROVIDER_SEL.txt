@@ -15,12 +15,14 @@ SELECTION-SCREEN END OF LINE.
 
 SELECT-OPTIONS s_pyper FOR p0008-begda NO-EXTENSION NO-DISPLAY.  " Payroll period
 
-PARAMETERS p_ovrtwt  TYPE t512w-lgart OBLIGATORY.     " Overtime Wage Type
-PARAMETERS p_ovrpwt  TYPE t512w-lgart OBLIGATORY.     " Overtime Pay Wage Type
-PARAMETERS p_hrrwt   TYPE t512w-lgart OBLIGATORY.     " Hours reset Wage Type
-PARAMETERS p_salwt   TYPE t512w-lgart OBLIGATORY.     " Salary Wage Type
-PARAMETERS p_bonwt  TYPE t512w-lgart OBLIGATORY.      " Bonus Payout Wage Type
+PARAMETERS p_ovrtwt TYPE t512w-lgart OBLIGATORY.      " Overtime Wage Type
+PARAMETERS p_ovrpwt TYPE t512w-lgart OBLIGATORY.      " Overtime Pay Wage Type
+PARAMETERS p_hrrwt  TYPE t512w-lgart OBLIGATORY.      " Hours reset Wage Type
+PARAMETERS p_salwt  TYPE t512w-lgart OBLIGATORY.      " Salary Wage Type
+PARAMETERS p_bonwt TYPE t512w-lgart OBLIGATORY.       " Bonus Payout Wage Type
+PARAMETERS p_diswt TYPE t512w-lgart OBLIGATORY.       " Employee Discount Wage Type
 PARAMETERS p_quota  TYPE p2006-ktart OBLIGATORY.      " Absence quota type
+PARAMETERS p_ttran  TYPE p2012-subty.                 " Time Transfers subtype
 PARAMETERS p_vacl AS CHECKBOX.                        " Vacation for leavers only
 PARAMETERS p_endp AS CHECKBOX.                        " Data for end of period only
 SELECTION-SCREEN END OF BLOCK data.

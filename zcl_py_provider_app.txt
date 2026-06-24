@@ -23,6 +23,7 @@ CLASS zcl_py_provider_app DEFINITION
           hours_reset     TYPE lgart,
           salary          TYPE lgart,
           bonus_payout    TYPE lgart,
+          empl_discount   TYPE lgart,
         END OF wage_type,
       END OF ts_params .
     TYPES:
@@ -109,6 +110,7 @@ CLASS zcl_py_provider_app DEFINITION
         !hours_reset_wage_type     TYPE lgart
         !salary_wage_type          TYPE lgart
         !bonus_payout_wage_type    TYPE lgart
+        !empl_discount_wage_type   TYPE lgart
         !quota_type                TYPE p2006-ktart
         !vacation_for_leavers      TYPE abap_bool
         !data_for_end_of_period    TYPE abap_bool
@@ -262,6 +264,11 @@ private section.
   methods IS_PY_DATA_MODE
     returning
       value(RESULT) type ABAP_BOOL .
+  methods GET_QUOTA_ENTITLEMENT
+    importing
+      !P2006 type P2006
+    returning
+      value(RESULT) type P2006-ANZHL .
 ENDCLASS.
 
 
@@ -449,6 +456,17 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
         <currency_bonus> = bonus_p0015-waers.
       ENDIF.
 
+      DATA(empl_discount_p0015) = VALUE #( p0015s[ lgart = me->params-wage_type-empl_discount ] OPTIONAL ).
+      ASSIGN row->('EMPL_DISCOUNT') TO FIELD-SYMBOL(<empl_discount>).
+      IF sy-subrc EQ 0.
+        <empl_discount> = empl_discount_p0015-betrg.
+      ENDIF.
+
+      ASSIGN row->('CURRENCY_EMPL_DISCOUNT') TO FIELD-SYMBOL(<currency_empl_discount>).
+      IF sy-subrc EQ 0.
+        <currency_empl_discount> = empl_discount_p0015-waers.
+      ENDIF.
+
       ASSIGN row->('WEEKLY_HOURS') TO FIELD-SYMBOL(<weekly_hours>).
       IF sy-subrc EQ 0.
         <weekly_hours> = p0007-wostd.
@@ -475,7 +493,13 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
           IF sy-subrc EQ 0.
             <vacation_balance> = me->calculate_vacation_balance( p2006 ).
           ENDIF.
+
+          ASSIGN row->('VACATION_ENTITLEMENT') TO FIELD-SYMBOL(<vacation_entitlement>).
+          IF sy-subrc EQ 0.
+            <vacation_entitlement> = me->get_quota_entitlement( p2006 ).
+          ENDIF.
         ENDIF.
+
 
         " Get date for the forced payment from the tech.wage type '9PAY'
         forced_payment_date = me->get_forced_payment_date( b2_cluster ).
@@ -600,11 +624,14 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
       ( fieldname = 'HOURS_RESET'       ref_table = 'PC2B5'    ref_field = 'ANZHL' )
       ( fieldname = 'HOURS_COST'        ref_table = 'PA0008'   ref_field = 'BET01' )
       ( fieldname = 'CURRENCY_HOURS'    ref_table = 'PA0008'   ref_field = 'WAERS' )
+      ( fieldname = 'VACATION_ENTITLEMENT'  ref_table = 'PA2006'   ref_field = 'ANZHL' )
       ( fieldname = 'VACATION_BALANCE'  ref_table = 'PA2006'   ref_field = 'ANZHL' )
       ( fieldname = 'MONTHLY_SALARY'    ref_table = 'PA0008'   ref_field = 'BET01' )
       ( fieldname = 'CURRENCY_SALARY'   ref_table = 'PA0008'   ref_field = 'WAERS' )
-      ( fieldname = 'BONUS_PAYOUT'      ref_table = 'PA0008'   ref_field = 'BET01' )
-      ( fieldname = 'CURRENCY_BONUS'    ref_table = 'PA0008'   ref_field = 'WAERS' )
+      ( fieldname = 'BONUS_PAYOUT'      ref_table = 'PA0015'   ref_field = 'BETRG' )
+      ( fieldname = 'CURRENCY_BONUS'    ref_table = 'PA0015'   ref_field = 'WAERS' )
+      ( fieldname = 'EMPL_DISCOUNT'     ref_table = 'PA0015'   ref_field = 'BETRG' )
+      ( fieldname = 'CURRENCY_EMPL_DISCOUNT'     ref_table = 'PA0015'   ref_field = 'WAERS' )
       ( fieldname = 'WEEKLY_HOURS'      ref_table = 'PA0007'   ref_field = 'WOSTD' )
       ( fieldname = 'COLOR'             ref_table = 'ZHR_PY_S_ALV_CELL_COLOR'
                                         ref_field = 'COLOR' )
@@ -1025,6 +1052,17 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
 
 
 * <SIGNATURE>---------------------------------------------------------------------------------------+
+* | Instance Private Method ZCL_PY_PROVIDER_APP->GET_QUOTA_ENTITLEMENT
+* +-------------------------------------------------------------------------------------------------+
+* | [--->] P2006                          TYPE        P2006
+* | [<-()] RESULT                         TYPE        P2006-ANZHL
+* +--------------------------------------------------------------------------------------</SIGNATURE>
+  method GET_QUOTA_ENTITLEMENT.
+    result = p2006-anzhl.
+  endmethod.
+
+
+* <SIGNATURE>---------------------------------------------------------------------------------------+
 * | Instance Private Method ZCL_PY_PROVIDER_APP->GET_ZL_NUMBER
 * +-------------------------------------------------------------------------------------------------+
 * | [--->] B2_CLUSTER                     TYPE        HRF_TIM_B2
@@ -1219,6 +1257,11 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
           column->r_column->set_medium_text( 'Hours Cost currency' ).
           column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
 
+        WHEN 'VACATION_ENTITLEMENT'.
+          column->r_column->set_short_text( 'Vac.Ent.' ).
+          column->r_column->set_medium_text( 'Vac. entitlement' ).
+          column->r_column->set_long_text( 'Vacation entitlement' ).
+
         WHEN 'VACATION_BALANCE'.
           column->r_column->set_short_text( 'Vac.Bal.' ).
           column->r_column->set_medium_text( 'Curr. vac. balance' ).
@@ -1244,6 +1287,17 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
         WHEN 'CURRENCY_BONUS'.
           column->r_column->set_short_text( 'BonusCurr.' ).
           column->r_column->set_medium_text( 'Bonus currency' ).
+          column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
+
+        WHEN 'EMPL_DISCOUNT'.
+          column->r_column->set_short_text( 'EmplDisc' ).
+          column->r_column->set_medium_text( 'Empl. discount' ).
+          column->r_column->set_long_text( 'Employee Discount Information' ).
+          column->r_column->set_currency_column( 'CURRENCY_EMPL_DISCOUNT' ).
+
+        WHEN 'CURRENCY_EMPL_DISCOUNT'.
+          column->r_column->set_short_text( 'EDiscCurr.' ).
+          column->r_column->set_medium_text( 'Empl. Disc. currency' ).
           column->r_column->set_long_text( column->r_column->get_medium_text( ) ).
 
         WHEN 'WEEKLY_HOURS'.
@@ -1344,6 +1398,7 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
 * | [--->] HOURS_RESET_WAGE_TYPE          TYPE        LGART
 * | [--->] SALARY_WAGE_TYPE               TYPE        LGART
 * | [--->] BONUS_PAYOUT_WAGE_TYPE         TYPE        LGART
+* | [--->] EMPL_DISCOUNT_WAGE_TYPE        TYPE        LGART
 * | [--->] QUOTA_TYPE                     TYPE        P2006-KTART
 * | [--->] VACATION_FOR_LEAVERS           TYPE        ABAP_BOOL
 * | [--->] DATA_FOR_END_OF_PERIOD         TYPE        ABAP_BOOL
@@ -1363,7 +1418,8 @@ CLASS ZCL_PY_PROVIDER_APP IMPLEMENTATION.
                                                             overtime_pay    = overtime_pay_wage_type
                                                             hours_reset     = hours_reset_wage_type
                                                             salary          = salary_wage_type
-                                                            bonus_payout    = bonus_payout_wage_type ) ).
+                                                            bonus_payout    = bonus_payout_wage_type
+                                                            empl_discount   = empl_discount_wage_type  ) ).
 
   ENDMETHOD.
 ENDCLASS.
