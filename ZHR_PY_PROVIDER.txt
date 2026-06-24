@@ -95,6 +95,7 @@ GET pernr.
   rp_provide_from_last p0002 space   pn-begda pn-endda.
   rp_provide_from_last p0032 space   pn-begda pn-endda.
   rp_provide_from_last p2006 p_quota pn-begda pn-endda.
+  rp_provide_from_last p2012 p_ttran pn-begda pn-endda.
 
   app->add_employee_data( pernr  = pernr-pernr
                           p0001s = CONV #( p0001[] )
@@ -102,7 +103,7 @@ GET pernr.
                           p0007s = p0007[]
                           p0008s = p0008[]
                           p0015s = CONV #( p0015[] )
-                          p2012s = CONV #( p2012[] )
+                          p2012  = p2012
                           p0032  = p0032
                           p0130s = CONV #( p0130[] )
                           p2006  = p2006 ).
